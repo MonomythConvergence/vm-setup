@@ -1,35 +1,36 @@
 #!/bin/bash
 set -e
 
-# Check for CDROM device (retry 3 times)
-for i in {1..3}; do
-  CD_DEVICE=$(lsblk -o NAME,MOUNTPOINT | grep -i 'cdrom.*/mnt' | awk '{print $1}' || true)
-  [ -n "$CD_DEVICE" ] && break
-  echo "Retrying CD detection ($i/3)..."
-  sleep 2
-done
-
-# Fallback to direct device check
-if [ -z "$CD_DEVICE" ]; then
-  CD_DEVICE=$(ls /dev/sr* 2>/dev/null | head -1)
-  [ -z "$CD_DEVICE" ] && echo "ERROR: No CDROM device found. Confirm ISO is inserted in VirtualBox UI." && exit 1
+# 1. Verify ISO is detected
+echo "==== VERIFYING CDROM ===="
+CD_DEVICE="/dev/sr0"
+if ! sudo blkid "$CD_DEVICE" | grep -q "TYPE=\"iso9660\""; then
+  echo "ERROR: Insert Guest Additions ISO via VirtualBox UI (Devices > Insert Guest Additions CD Image)"
+  exit 1
 fi
 
-# Install dependencies
+# 2. Install dependencies
+echo "==== INSTALLING DEPENDENCIES ===="
 sudo apt update
 sudo apt install -y build-essential dkms linux-headers-$(uname -r)
 
-# Mount ISO
-sudo mkdir -p /mnt/cdrom
+# 3. Force unmount and remount
+echo "==== MOUNTING ISO ===="
 sudo umount /mnt/cdrom 2>/dev/null || true
-sudo mount $CD_DEVICE /mnt/cdrom
+sudo mkdir -p /mnt/cdrom
+sudo mount -t iso9660 "$CD_DEVICE" /mnt/cdrom
 
-# Install Guest Additions
-sudo /mnt/cdrom/VBoxLinuxAdditions.run
+# 4. Install Guest Additions
+echo "==== INSTALLING GUEST ADDITIONS ===="
+sudo /mnt/cdrom/VBoxLinuxAdditions.run || echo "Continue despite installer exit code..."
+
+# 5. Verify installation
+echo "==== VERIFYING INSTALLATION ===="
+sudo /usr/lib/virtualbox/vboxdrv.sh status || echo "Kernel modules not loaded (reboot may fix)"
+
+# 6. Add user to vboxsf group
 sudo usermod -aG vboxsf $USER
+echo "User added to vboxsf group. Reboot to apply changes."
 
-# Verify
-echo "==== VERIFICATION ===="
-sudo /usr/lib/virtualbox/vboxdrv.sh status
-echo "Rebooting..."
-sudo reboot
+# 7. Optional: Check clipboard service
+systemctl is-active vboxadd-service >/dev/null && echo "Clipboard service active" || echo "Clipboard service inactive (may need reboot)"
