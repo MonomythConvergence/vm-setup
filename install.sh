@@ -1,45 +1,23 @@
 #!/bin/bash
-echo "==== CLIPBOARD DIAGNOSTICS ===="
+# Fixes X11 permissions and display issues
+echo "=== FIXING X11 ACCESS ==="
 
-# 1. Check VirtualBox services
-echo -e "\n[1] Guest Additions Status:"
-systemctl status vboxadd-service --no-pager | grep -E "Active:|Loaded:"
-vboxclient --version 2>/dev/null || echo "vboxclient not found"
+# Install required packages
+sudo apt update && sudo apt install -y xauth x11-xserver-utils virtualbox-guest-utils 2>/dev/null || {
+    echo "ERROR: Package installation failed"
+    exit 1
+}
 
-# 2. Verify kernel modules
-echo -e "\n[2] Loaded Kernel Modules:"
-lsmod | grep vbox
+# Configure X11 permissions
+xhost +local: 2>/dev/null || {
+    echo "WARNING: xhost command failed (may need manual intervention)"
+}
 
-# 3. Check X11/Wayland environment
-echo -e "\n[3] Display Environment:"
-echo -n "DISPLAY: "; printenv DISPLAY
-echo -n "XDG_SESSION_TYPE: "; echo $XDG_SESSION_TYPE
-which xclip 2>/dev/null && echo "xclip installed" || echo "xclip missing"
-
-# 4. Test clipboard mechanisms
-echo -e "\n[4] Clipboard Tests:"
-if [[ $XDG_SESSION_TYPE == "wayland" ]]; then
-  which wl-copy 2>/dev/null && echo "wl-copy available" || echo "Wayland: Install wl-clipboard"
-else
-  xhost >/dev/null 2>&1 && echo "X11 access granted" || echo "X11 access denied"
+# Set display variable
+if [[ -z "$DISPLAY" ]]; then
+    echo "export DISPLAY=:0" >> ~/.bashrc
+    source ~/.bashrc
+    echo "Set DISPLAY=:0"
 fi
 
-# 5. Shared folder check
-echo -e "\n[5] Shared Folders:"
-mount | grep vboxsf || echo "No shared folders mounted"
-
-# 6. Suggested fixes
-echo -e "\n==== SUGGESTED ACTIONS ===="
-if ! systemctl is-active vboxadd-service >/dev/null; then
-  echo "1. Restart Guest Additions: sudo /sbin/rcvboxadd setup"
-fi
-if ! lsmod | grep -q vbox; then
-  echo "2. Rebuild kernel modules: sudo /usr/lib/virtualbox/vboxdrv.sh setup"
-fi
-if [[ -z $DISPLAY ]]; then
-  echo "3. Set DISPLAY: export DISPLAY=:0"
-fi
-if ! which xclip >/dev/null && [[ $XDG_SESSION_TYPE != "wayland" ]]; then
-  echo "4. Install xclip: sudo apt install xclip"
-fi
-echo "============================="
+echo "X11 configuration complete"
