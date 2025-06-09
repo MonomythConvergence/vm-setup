@@ -1,29 +1,35 @@
 #!/bin/bash
-# CORRECTED VirtualBox Service Restart Script
-echo "=== RESTARTING VIRTUALBOX SERVICES ==="
+# SAFE Guest Additions Reinstall Script
+set -e
 
-# Verify vboxdrv.sh exists
-if [ ! -f /usr/lib/virtualbox/vboxdrv.sh ]; then
-    echo "ERROR: VirtualBox kernel modules not found. Reinstall Guest Additions."
-    echo "Run: sudo /mnt/cdrom/VBoxLinuxAdditions.run"
-    exit 1
+echo "=== GUEST ADDITIONS RECOVERY ==="
+
+# 1. Verify ISO Mount
+if ! sudo mount /dev/sr0 /mnt 2>/dev/null && ! sudo mount /dev/cdrom /mnt 2>/dev/null; then
+  echo "ERROR: Insert Guest Additions CD via VirtualBox UI first:"
+  echo "Devices > Optical Drives > Choose Disk Image"
+  exit 1
 fi
 
-# Rebuild modules
-sudo /usr/lib/virtualbox/vboxdrv.sh setup || {
-    echo "ERROR: Module rebuild failed. Check logs:"
-    echo "cat /var/log/vboxadd-install.log"
-    exit 1
-}
+# 2. Purge Old Installations
+sudo apt purge -y virtualbox-guest-* 2>/dev/null || true
 
-# Restart services
-sudo systemctl restart vboxadd-service vboxadd || {
-    echo "WARNING: Service restart failed (continuing anyway)"
-}
+# 3. Install Dependencies
+sudo apt update
+sudo apt install -y build-essential dkms linux-headers-$(uname -r)
 
-# Start vboxclient
-VBoxClient --clipboard 2>/dev/null || {
-    echo "WARNING: vboxclient failed to start"
-}
+# 4. Run Installer
+sudo /mnt/VBoxLinuxAdditions.run --force
 
-echo "=== SERVICE RESTART COMPLETE ==="
+# 5. Post-Install Setup
+sudo /sbin/rcvboxadd setup
+sudo usermod -aG vboxsf $USER
+
+# 6. Verify
+echo "=== VERIFICATION ==="
+ls /usr/lib/virtualbox/vboxdrv.sh && echo "✓ Kernel modules exist" || echo "✗ Missing modules"
+systemctl is-active vboxadd-service && echo "✓ Service running" || echo "✗ Service inactive"
+
+# 7. Cleanup
+sudo umount /mnt
+echo "=== COMPLETE ==="
