@@ -1,23 +1,23 @@
 #!/bin/bash
-# Fixes X11 permissions and display issues
-echo "=== FIXING X11 ACCESS ==="
+# Restarts all VirtualBox services properly
+echo "=== RESTARTING VIRTUALBOX SERVICES ==="
 
-# Install required packages
-sudo apt update && sudo apt install -y xauth x11-xserver-utils virtualbox-guest-utils 2>/dev/null || {
-    echo "ERROR: Package installation failed"
+# Rebuild kernel modules
+sudo /usr/lib/virtualbox/vboxdrv.sh setup || {
+    echo "ERROR: Failed to rebuild kernel modules"
     exit 1
 }
 
-# Configure X11 permissions
-xhost +local: 2>/dev/null || {
-    echo "WARNING: xhost command failed (may need manual intervention)"
+# Restart services
+sudo systemctl restart vboxadd-service vboxadd 2>/dev/null || {
+    echo "WARNING: Some services failed to restart"
 }
 
-# Set display variable
-if [[ -z "$DISPLAY" ]]; then
-    echo "export DISPLAY=:0" >> ~/.bashrc
-    source ~/.bashrc
-    echo "Set DISPLAY=:0"
-fi
+# Start vboxclient
+/usr/bin/VBoxClient --clipboard 2>/dev/null && {
+    echo "vboxclient started successfully"
+} || {
+    echo "ERROR: Failed to start vboxclient"
+}
 
-echo "X11 configuration complete"
+echo "Service restart complete"
