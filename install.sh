@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo apt update && sudo apt install -y xclip
+sudo apt update && sudo apt install -y xclip xauth
