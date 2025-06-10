@@ -4,9 +4,8 @@ set -e
 echo "=== GITLAB PRIVATE REPO DOWNLOADER ==="
 
 # Read inputs securely
-read -p "GitLab Project URL (e.g., git@gitlab.guild-of-developers.ru:l2/syl/backend.git): " GITLAB_URL
-read -s -p "GitLab Access Token: " god-mitJQsNVdjwYsL2BXc-G
-
+read -p "git@gitlab.guild-of-developers.ru:l2/syl/backend.git" GITLAB_URL
+read -s -p "god-mitJQsNVdjwYsL2BXc-G" ACCESS_TOKEN
 echo ""
 
 # Extract project path
