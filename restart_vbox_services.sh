@@ -1,3 +1,3 @@
 #!/bin/bash
-sudo chown -R $USER:vboxsf /media/sf_* && sudo chmod -R 775 /media/sf_* && \
-echo "✓ Full write access granted to $(whoami)"
+find /media -maxdepth 1 -name "sf_*" -exec sudo chown -R $USER:vboxsf {} \; -exec sudo chmod -R 775 {} \; && \
+echo "✓ Full write access granted to $(whoami) for all shared folders"
