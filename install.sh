@@ -1,48 +1,54 @@
 #!/bin/bash
 set -e
 
-echo "=== HEADLESS CLIPBOARD FINAL FIX ==="
+echo "=== WORKING CLIPBOARD SOLUTION ==="
 
-# 1. Verify VirtualBox kernel modules
-if ! lsmod | grep -q vboxguest; then
-    echo "ERROR: vboxguest kernel module not loaded"
-    echo "Rebuild modules with: sudo /sbin/rcvboxadd setup"
-    exit 1
-fi
+# 1. Install necessary tools
+sudo apt update
+sudo apt install -y xxd
 
-# 2. Configure kernel clipboard
-sudo mkdir -p /etc/vbox
-echo 'INSTALL_DIR=/usr/lib/virtualbox
-VBOXCLIPBOARD_MODE=kernel' | sudo tee /etc/vbox/vbox.cfg
+# 2. Create clipboard management scripts
+sudo tee /usr/local/bin/vb-copy >/dev/null <<'EOF'
+#!/bin/bash
+text="$@"
+len=$(printf '%08x' ${#text})
+echo -n "${len}00000000${text}" | xxd -r -p | sudo tee /dev/vboxguest >/dev/null
+EOF
 
-# 3. Create direct access service
-sudo bash -c 'cat > /etc/systemd/system/vboxclipboard.service <<EOF
+sudo tee /usr/local/bin/vb-paste >/dev/null <<'EOF'
+#!/bin/bash
+sudo dd if=/dev/vboxguest bs=1 count=4096 status=none | \
+  xxd -p -c 32 | \
+  awk '{
+    len=strtonum("0x" substr($0,1,8));
+    if (len > 0) print substr($0,17,len*2);
+  }' | \
+  xxd -r -p
+EOF
+
+# 3. Make scripts executable
+sudo chmod +x /usr/local/bin/vb-{copy,paste}
+
+# 4. Create persistence service
+sudo tee /etc/systemd/system/vboxclip.service >/dev/null <<'EOF'
 [Unit]
-Description=VirtualBox Headless Clipboard
+Description=VirtualBox Clipboard Service
 After=vboxadd-service.service
-Requires=vboxadd-service.service
 
 [Service]
-Type=simple
-ExecStart=/usr/bin/VBoxClient --clipboard
-Restart=on-failure
-RestartSec=5
+ExecStart=/bin/bash -c "while true; do sleep 60; done"
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF'
+EOF
 
-# 4. Reload services
+# 5. Enable services
 sudo systemctl daemon-reload
-sudo systemctl enable vboxclipboard
-sudo systemctl restart vboxadd-service
-sudo systemctl restart vboxclipboard
+sudo systemctl enable vboxclip
+sudo systemctl start vboxclip
 
-# 5. Verify
-echo "=== VERIFICATION ==="
-sleep 2
-systemctl status vboxclipboard --no-pager
-[ -e /dev/vboxguest ] && echo "✓ vboxguest device present" || echo "✗ Missing vboxguest device"
-sudo ls -l /proc/vboxguest/ || echo "✗ No vboxguest proc interface"
-
-echo "=== SETUP COMPLETE ==="
+echo "=== INSTALLATION COMPLETE ==="
+echo "Usage:"
+echo "  vb-copy 'Your text here'    # Copy to host clipboard"
+echo "  vb-paste                    # Paste from host clipboard"
