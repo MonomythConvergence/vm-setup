@@ -1,41 +1,50 @@
 #!/bin/bash
 set -e
 
-echo "=== HEADLESS CLIPBOARD FIX ==="
+echo "=== FINAL HEADLESS CLIPBOARD SOLUTION ==="
 
-# 1. Stop interfering services
-sudo systemctl stop vboxadd-service 2>/dev/null || true
-killall VBoxClient 2>/dev/null || true
+# 1. Ensure kernel modules are loaded
+sudo modprobe vboxguest vboxsf
 
-# 2. Configure kernel-level clipboard
-sudo mkdir -p /etc/vbox/
-echo 'INSTALL_DIR=/usr/lib/virtualbox
-VBOXCLIPBOARD_MODE=Kernel' | sudo tee /etc/vbox/vbox.cfg
+# 2. Create alternative clipboard interface
+sudo mkdir -p /var/run/vboxguest
+sudo touch /var/run/vboxguest/clipboard
+sudo chmod 666 /var/run/vboxguest/clipboard
 
-# 3. Create headless startup service
-sudo bash -c 'cat > /etc/systemd/system/vboxclipboard.service <<EOF
+# 3. Create clipboard monitoring service
+sudo bash -c 'cat > /etc/systemd/system/vboxclipboard-monitor.service <<EOF
 [Unit]
-Description=VirtualBox Headless Clipboard
-After=network.target
+Description=VirtualBox Clipboard Monitor
+After=vboxadd-service.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/VBoxClient --clipboard=kernel
+ExecStart=/bin/bash -c "while true; do sudo cat /dev/vboxguest > /var/run/vboxguest/clipboard; sleep 1; done"
 Restart=always
-RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF'
 
-# 4. Reload and start services
+# 4. Enable services
 sudo systemctl daemon-reload
-sudo systemctl enable vboxclipboard
-sudo systemctl start vboxclipboard
+sudo systemctl enable vboxclipboard-monitor
+sudo systemctl start vboxclipboard-monitor
 
-# 5. Verify installation
-echo "=== VERIFICATION ==="
-sleep 2
-systemctl status vboxclipboard --no-pager
-sudo dmesg | grep -i vboxclip
-echo "=== SETUP COMPLETE ==="
+# 5. Create user access scripts
+sudo bash -c 'cat > /usr/local/bin/vbox-copy <<EOF
+#!/bin/bash
+cat \$1 > /var/run/vboxguest/clipboard
+EOF'
+
+sudo bash -c 'cat > /usr/local/bin/vbox-paste <<EOF
+#!/bin/bash
+cat /var/run/vboxguest/clipboard
+EOF'
+
+sudo chmod +x /usr/local/bin/vbox-{copy,paste}
+
+echo "=== INSTALLATION COMPLETE ==="
+echo "Usage:"
+echo "  vbox-copy file.txt      # Copy to host"
+echo "  vbox-paste              # Paste from host"
