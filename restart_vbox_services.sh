@@ -1,50 +1,41 @@
 #!/bin/bash
 set -e
 
-echo "=== GUEST ADDITIONS FORCED INSTALLATION ==="
+echo "=== HEADLESS CLIPBOARD FIX ==="
 
-# 1. Verify ISO is inserted in VirtualBox UI
-echo "1. Checking for mounted Guest Additions ISO..."
+# 1. Stop interfering services
+sudo systemctl stop vboxadd-service 2>/dev/null || true
+killall VBoxClient 2>/dev/null || true
 
-# 2. Force unmount and remount
-sudo umount /mnt/cdrom 2>/dev/null || true
-sudo mkdir -p /mnt/cdrom
+# 2. Configure kernel-level clipboard
+sudo mkdir -p /etc/vbox/
+echo 'INSTALL_DIR=/usr/lib/virtualbox
+VBOXCLIPBOARD_MODE=Kernel' | sudo tee /etc/vbox/vbox.cfg
 
-if ! sudo mount /dev/sr0 /mnt/cdrom 2>/dev/null && ! sudo mount /dev/cdrom /mnt/cdrom 2>/dev/null; then
-  echo "ERROR: No CDROM device detected. Confirm:"
-  echo "1. ISO is inserted in VirtualBox UI (Devices > Optical Drives)"
-  echo "2. VM has a virtual optical drive attached"
-  exit 1
-fi
+# 3. Create headless startup service
+sudo bash -c 'cat > /etc/systemd/system/vboxclipboard.service <<EOF
+[Unit]
+Description=VirtualBox Headless Clipboard
+After=network.target
 
-# 3. Find installer (handle corrupted filenames)
-INSTALLER=$(ls /mnt/cdrom/VBoxLinuxAdditions.run 2>/dev/null || ls /mnt/cdrom/VBox*.run | head -1)
-if [ -z "$INSTALLER" ]; then
-  echo "ERROR: No installer found in /mnt/cdrom/"
-  echo "Contents of /mnt/cdrom/:"
-  ls -l /mnt/cdrom/
-  exit 1
-fi
+[Service]
+Type=simple
+ExecStart=/usr/bin/VBoxClient --clipboard=kernel
+Restart=always
+RestartSec=10
 
-# 4. Install dependencies
-echo "2. Installing dependencies..."
-sudo apt update
-sudo apt install -y build-essential dkms linux-headers-$(uname -r)
+[Install]
+WantedBy=multi-user.target
+EOF'
 
-# 5. Run installer
-echo "3. Running installer with --accept flag..."
-sudo $INSTALLER --accept
+# 4. Reload and start services
+sudo systemctl daemon-reload
+sudo systemctl enable vboxclipboard
+sudo systemctl start vboxclipboard
 
-# 6. Post-install setup
-echo "4. Configuring kernel modules..."
-sudo /sbin/rcvboxadd setup
-sudo usermod -aG vboxsf $USER >/dev/null
-
-# 7. Verification
-echo "5. Verifying installation..."
-[ -f /usr/lib/virtualbox/vboxdrv.sh ] && echo "✓ Kernel modules exist" || echo "✗ Missing kernel modules"
-systemctl is-active vboxadd-service >/dev/null && echo "✓ Service running" || echo "✗ Service not running"
-
-# 8. Cleanup
-sudo umount /mnt/cdrom
-echo "=== INSTALLATION COMPLETE ==="
+# 5. Verify installation
+echo "=== VERIFICATION ==="
+sleep 2
+systemctl status vboxclipboard --no-pager
+sudo dmesg | grep -i vboxclip
+echo "=== SETUP COMPLETE ==="
