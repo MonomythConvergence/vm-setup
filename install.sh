@@ -1,2 +1,4 @@
 #!/bin/bash
-sudo mount -t vboxsf -o rw,uid=$(id -u),gid=$(id -g),dmode=775,fmode=664 api /media/sf_api
+#!/bin/bash
+TOKEN="god-mitJQsNVdjwYsL2BXc-G"  # Replace with your token
+git clone "https://oauth2:$TOKEN@gitlab.guild-of-developers.ru/l2/syl/backend.git"
