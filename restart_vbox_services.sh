@@ -1,3 +1,4 @@
 #!/bin/bash
-
-touch /media/sf_api/test_file && echo "✓ Write access fixed" || echo "✗ Fix failed"
+echo "sudo chown -R \$USER:vboxsf /media/sf_*" | sudo tee /etc/rc.local
+sudo chmod +x /etc/rc.local
+sudo systemctl enable rc-local
