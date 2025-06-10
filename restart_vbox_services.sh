@@ -1,3 +1,2 @@
 #!/bin/bash
-find /media -maxdepth 1 -name "sf_*" -exec sudo chown -R $USER:vboxsf {} \; -exec sudo chmod -R 775 {} \; && \
-echo "✓ Full write access granted to $(whoami) for all shared folders"
+sudo mount -t vboxsf -o rw,uid=$(id -u),gid=$(id -g),dmode=775,fmode=664 backend /media/sf_backend
